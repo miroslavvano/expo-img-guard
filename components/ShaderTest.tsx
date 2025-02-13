@@ -11,11 +11,14 @@ import { ExpoWebGLRenderingContext, GLView } from "expo-gl";
 import { Asset } from "expo-asset";
 import * as ImagePicker from "expo-image-picker";
 
+type BrightnessStatus = "too dark" | "too light" | "normal";
+
 export default function ShaderTest() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [isBlurry, setIsBlurry] = useState<boolean | null>(null);
-  const [brightnessStatus, setBrightnessStatus] = useState<string | null>(null);
+  const [brightnessStatus, setBrightnessStatus] =
+    useState<BrightnessStatus | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -94,7 +97,11 @@ export default function ShaderTest() {
         }
       />
 
-      <Image source={{ uri: photoUri }} resizeMode="contain" style={{ flex: 1 }} />
+      <Image
+        source={{ uri: photoUri }}
+        resizeMode="contain"
+        style={{ flex: 1 }}
+      />
       <Text style={styles.infoText}>
         {isBlurry === null
           ? "Processing..."
@@ -125,13 +132,15 @@ export default function ShaderTest() {
 }
 
 /**
- * This function loads the captured image as a texture, applies a Laplacian filter via a fragment shader,
+ * This function loads the captured image as a texture,
+ * first detects brightness on original image,
+ * then applies a Laplacian filter via a fragment shader,
  * and then computes the variance of the edge intensities to decide if the image is blurry.
  */
 export async function onContextCreate(
   gl: ExpoWebGLRenderingContext,
   photoUri: string,
-  setBrightnessStatus: Dispatch<SetStateAction<string | null>>,
+  setBrightnessStatus: Dispatch<SetStateAction<BrightnessStatus | null>>,
   setIsBlurry: Dispatch<SetStateAction<boolean | null>>
 ) {
   const width = gl.drawingBufferWidth;
@@ -345,10 +354,9 @@ export async function onContextCreate(
   setIsBlurry(blurry);
 
   gl.endFrameEXP();
-
-  console.log(asset.name)
-  console.log('')
 }
+
+const EDGE_VARIANCE_THRESHOLD = 0.005;
 
 /**
  * Reads back the framebuffer and computes the variance of the edge intensities.
@@ -359,7 +367,7 @@ function detectBlurrinessByVariance(
   gl: ExpoWebGLRenderingContext,
   width: number,
   height: number,
-  threshold = 0.005
+  threshold = EDGE_VARIANCE_THRESHOLD
 ) {
   // Read back pixel data.
   const pixelBuffer = new Uint8Array(width * height * 4);
@@ -383,6 +391,16 @@ function detectBlurrinessByVariance(
   console.log("Variance of Laplacian:", variance);
   return variance < threshold;
 }
+
+/*  Reads the pixel data from the current WebGL framebuffer and calculates the average luminance of the image.
+ *  It computes the luminance for each pixel using the formula:
+ *      luminance = 0.299 * red + 0.587 * green + 0.114 * blue
+ *
+ *  Based on the average luminance (on a scale of 0 to 255), it determines the brightness status:
+ *   - Returns "too dark" if the average luminance is below 50.
+ *   - Returns "too light" if the average luminance is above 200.
+ *   - Returns "normal" otherwise.
+ */
 
 function detectBrightness(
   gl: ExpoWebGLRenderingContext,
@@ -409,12 +427,7 @@ function detectBrightness(
 
   // Compute the average luminance (in 0-255 scale).
   const avgLuminance = totalLuminance / numPixels;
-  console.log(
-    "Average luminance (0-255 scale):",
-    avgLuminance,
-    totalLuminance,
-    numPixels
-  );
+  console.log("Average luminance (0-255 scale):", avgLuminance);
 
   // Use the new criteria: too dark if below 50, too light if above 200.
   if (avgLuminance < 50) {
@@ -425,6 +438,7 @@ function detectBrightness(
     return "normal";
   }
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
