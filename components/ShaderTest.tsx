@@ -356,6 +356,12 @@ export async function onContextCreate(
   gl.endFrameEXP();
 }
 
+/**
+ * Based on this we can determine if the image is blurry or not.
+ * Blurry images have low edge variance and vice versa.
+ * Based on sample data I set it to 0.005 but it can be adjusted for more precision.
+ */
+
 const EDGE_VARIANCE_THRESHOLD = 0.005;
 
 /**
